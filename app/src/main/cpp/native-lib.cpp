@@ -26,9 +26,7 @@ typedef struct myTree{
     myTree* childs[256] = {};
 } myTree;
 
-
 myTree globalTree = {0,{}};
-
 
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -47,7 +45,7 @@ int getSocket(){
 
     // 2. Server address
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(54000);
+    server_addr.sin_port = htons(54910);
     server_addr.sin_addr.s_addr = inet_addr("192.168.1.228"); // localhost
 
     // 3. Connect to server
@@ -119,19 +117,19 @@ void* threadFunc(void* arg) {
 
 
     while (1){
-        //__android_log_print(ANDROID_LOG_DEBUG, "MyNativeCode", "wile done");
 
-        sleep(2);
+        //sleep(2);
 
         n = read(sock, buffer, sizeof(buffer)-1);
         buffer[sizeof(buffer)-1] = '\0';
-        if (n > 0) {
-            add_to_tree(&globalTree, buffer);
-
-        }
-
         pthread_mutex_lock(&lock);
 
+        if (n > 0) {
+            add_to_tree(&globalTree, buffer);
+        }
+
+
+        __android_log_print(ANDROID_LOG_DEBUG, "MyNativeCode", "wile done %s", buffer);
 
         pthread_mutex_unlock(&lock);
 
@@ -152,7 +150,6 @@ void* threadFunc(void* arg) {
 
     return nullptr;
 }
-
 
 extern "C"
 JNIEXPORT void JNICALL
@@ -206,9 +203,9 @@ Java_com_example_test4_MainActivity_capitalize(
         env->SetObjectArrayElement(jarray, i, env->NewStringUTF(out[i].c_str()));
     }
 
-
-
     return jarray;
 }
+
+
 
 

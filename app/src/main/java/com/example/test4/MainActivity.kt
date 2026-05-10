@@ -70,23 +70,10 @@ fun InputDisplayApp() {
         verticalArrangement = Arrangement.Top
     ) {
 
-
         var searchState = remember { mutableStateOf("") }
         var extand = remember { mutableStateOf(false) }
 
-
-
-        // Mock dataset
-        val allItems = listOf(
-            "Apple", "Banana", "Orange", "Mango", "Grapes", "Blueberry", "Pineapple"
-        )
-
-        // Filter results based on query
-
-
-        MySimpleSearch(searchState, extand, allItems)
-
-
+        MySimpleSearch(searchState, extand,)
     }
 }
 
@@ -94,7 +81,6 @@ fun InputDisplayApp() {
 fun MySimpleSearch(
     searchState: MutableState<String>,
     extand: MutableState<Boolean>,
-    options: List<String>,
     modifier: Modifier = Modifier
 ) {
     Column (
@@ -108,7 +94,7 @@ fun MySimpleSearch(
                 searchState.value = it
                 extand.value = true
 
-                            },
+            },
             label = { Text("heh")},
             modifier = Modifier.fillMaxWidth()
         )
@@ -132,4 +118,3 @@ fun MySimpleSearch(
 
     }
 }
-
