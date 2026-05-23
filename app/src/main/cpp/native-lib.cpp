@@ -1,6 +1,6 @@
 #include <jni.h>
 #include <string>
-#include "test4.hpp"
+#include "test4.h"
 #include <jni.h>
 #include <pthread.h>
 #include <unistd.h> // for sleep
@@ -15,6 +15,8 @@
 #include <string.h>
 #include <unistd.h>       // close()
 #include <arpa/inet.h>    // sockaddr_in, inet_addr
+#include <signal.h>
+#include <unistd.h>
 
 struct ThreadData {
     JavaVM* jvm;
@@ -57,7 +59,6 @@ int getSocket(){
     }
 
     return sock;
-    // 6. Close socket
 };
 
 void add_to_tree(myTree* tree/*not NULL*/,const char* a/*delimited*/){
@@ -122,16 +123,19 @@ void* threadFunc(void* arg) {
 
         n = read(sock, buffer, sizeof(buffer)-1);
         buffer[sizeof(buffer)-1] = '\0';
-        pthread_mutex_lock(&lock);
 
         if (n > 0) {
+            pthread_mutex_lock(&lock);
             add_to_tree(&globalTree, buffer);
+            pthread_mutex_unlock(&lock);
+        } else {
+            return NULL;
         }
 
 
         __android_log_print(ANDROID_LOG_DEBUG, "MyNativeCode", "wile done %s", buffer);
 
-        pthread_mutex_unlock(&lock);
+
 
         i++;
 
@@ -171,8 +175,48 @@ Java_com_example_test4_MainActivity_startThread(JNIEnv *env, jobject thiz, jobje
     pthread_create(&thread, nullptr, threadFunc, data);
     pthread_detach(thread); // detach to avoid needing pthread_join
 }
+
+
+void handler(int sig) {
+    __android_log_print(ANDROID_LOG_DEBUG, "MyNativeCode", "<3 <3<3<3<3");
+
+}
+
+void* SIGNAL_TEST(void *args){
+    sleep(10);
+    pthread_t tid = (pthread_t)args;
+    pthread_kill(tid, 22);
+
+    return nullptr;
+}
+
+void* SIG_REC(void *args){
+    signal(22, handler);
+    while(1) {
+        sleep(1);
+    }
+
+
+    return nullptr;
+}
+
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_example_test4_MainActivity_SIGNALS(JNIEnv *env, jobject thiz) {
+    __android_log_print(ANDROID_LOG_DEBUG, "MyNativeCode", "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!hej");
+    pthread_t thread1, thread2;
+
+
+    signal(22, handler);
+
+    pthread_create(&thread2, nullptr, SIG_REC, NULL);
+    sleep(1);
+    pthread_create(&thread1, nullptr, SIGNAL_TEST, (void*)thread2);
+
+}
+
 extern "C" JNIEXPORT jobjectArray   JNICALL
-Java_com_example_test4_MainActivity_capitalize(
+        Java_com_example_test4_MainActivity_capitalize(
         JNIEnv* env,
         jobject,
         jstring in
@@ -205,7 +249,6 @@ Java_com_example_test4_MainActivity_capitalize(
 
     return jarray;
 }
-
 
 
 

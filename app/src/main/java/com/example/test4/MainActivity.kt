@@ -2,6 +2,7 @@ package com.example.test4
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
 import android.widget.TextView
 import com.example.test4.databinding.ActivityMainBinding
 
@@ -36,6 +37,8 @@ class MainActivity : ComponentActivity() {
 
     external fun startThread(callback: Callback)
 
+    external fun SIGNALS()
+
     companion object {
         init { System.loadLibrary("test4") }
         lateinit var instance: MainActivity
@@ -44,9 +47,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         instance = this
-
-
-
 
         startThread(object : Callback {
             override fun onResult(result: String) {
@@ -107,8 +107,11 @@ fun MySimpleSearch(
                         headlineContent = { Text(option) },
                         modifier = Modifier
                             .clickable {
+                                MainActivity.instance.SIGNALS()
                                 searchState.value = option
                                 extand.value = false
+                                Log.i("TAG", "hejjjjjjjjj Informational message")
+
                             }
                             .fillMaxWidth()
                     )

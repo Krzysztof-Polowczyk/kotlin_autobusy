@@ -16,4 +16,3 @@
 
 std::vector<std::string> capitalize(const char *in);
 
-
