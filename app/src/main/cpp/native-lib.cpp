@@ -110,10 +110,10 @@ void* threadFunc(void* arg) {
     callbackClass = env->GetObjectClass(data->callbackGlobalRef);
     onResultMethod = env->GetMethodID(callbackClass, "onResult", "(Ljava/lang/String;)V");
     jstring result = env->NewStringUTF("hej");
-
+    sleep(10);
     int i = 0;
     int sock = getSocket();
-    char buffer[1024] = {};
+    char buffer[64] = {};
     int n;
 
 
@@ -121,7 +121,7 @@ void* threadFunc(void* arg) {
 
         //sleep(2);
 
-        n = read(sock, buffer, sizeof(buffer)-1);
+        n = read(sock, buffer, sizeof(buffer));
         buffer[sizeof(buffer)-1] = '\0';
 
         if (n > 0) {
