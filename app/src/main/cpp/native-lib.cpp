@@ -17,6 +17,10 @@
 #include <arpa/inet.h>    // sockaddr_in, inet_addr
 #include <signal.h>
 #include <unistd.h>
+#include <format>
+
+thread_local int halt = 0;
+#include <sched.h>
 
 struct ThreadData {
     JavaVM* jvm;
@@ -32,7 +36,7 @@ myTree globalTree = {0,{}};
 
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
-int getSocket(){
+int getSocket(int port, char const *ip){
 
     int sock;
     struct sockaddr_in server_addr;
@@ -45,10 +49,11 @@ int getSocket(){
         exit(EXIT_FAILURE);
     }
 
+
     // 2. Server address
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(54910);
-    server_addr.sin_addr.s_addr = inet_addr("192.168.1.228"); // localhost
+    server_addr.sin_port = htons(port);
+    server_addr.sin_addr.s_addr = inet_addr(ip); // localhost
 
     // 3. Connect to server
     if (connect(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
@@ -95,6 +100,7 @@ std::vector<std::string> getWords(myTree* tree, std::string prefix){
     if (tree->is_word){
         rest.push_back(prefix);
     }
+
     return rest;
 }
 
@@ -110,16 +116,21 @@ void* threadFunc(void* arg) {
     callbackClass = env->GetObjectClass(data->callbackGlobalRef);
     onResultMethod = env->GetMethodID(callbackClass, "onResult", "(Ljava/lang/String;)V");
     jstring result = env->NewStringUTF("hej");
-    sleep(10);
+
+    pthread_mutex_lock(&lock);
+    add_to_tree(&globalTree, "testtt");
+    pthread_mutex_unlock(&lock);
+
     int i = 0;
-    int sock = getSocket();
+    int sock = getSocket(54910, "192.168.1.228");
     char buffer[64] = {};
     int n;
 
+    //temp deboug remove
+    // end
+
 
     while (1){
-
-        //sleep(2);
 
         n = read(sock, buffer, sizeof(buffer));
         buffer[sizeof(buffer)-1] = '\0';
@@ -129,13 +140,12 @@ void* threadFunc(void* arg) {
             add_to_tree(&globalTree, buffer);
             pthread_mutex_unlock(&lock);
         } else {
+            close(sock);
             return NULL;
         }
 
 
         __android_log_print(ANDROID_LOG_DEBUG, "MyNativeCode", "wile done %s", buffer);
-
-
 
         i++;
 
@@ -170,48 +180,117 @@ Java_com_example_test4_MainActivity_startThread(JNIEnv *env, jobject thiz, jobje
     data->jvm = jvm;
     data->callbackGlobalRef = globalCallback;
 
-    // Create pthread
+
     pthread_t thread;
     pthread_create(&thread, nullptr, threadFunc, data);
-    pthread_detach(thread); // detach to avoid needing pthread_join
+    pthread_detach(thread);
 }
 
+
+typedef struct __attribute__((packed)) train_arives {
+    char time[10];
+    int line;
+    int vech;
+    char delimiter;
+} train_arives;
+
+pthread_mutex_t fetch_mutex, safty_mutex;
+std::vector<std::string> fetched_out;
+
+pthread_t fetching_thread;
 
 void handler(int sig) {
-    __android_log_print(ANDROID_LOG_DEBUG, "MyNativeCode", "<3 <3<3<3<3");
-
+    __android_log_print(ANDROID_LOG_DEBUG, "MyNativeCode", "terminating");
+    halt = 1;
 }
 
-void* SIGNAL_TEST(void *args){
-    sleep(10);
-    pthread_t tid = (pthread_t)args;
-    pthread_kill(tid, 22);
-
-    return nullptr;
-}
+volatile ThreadData *on_fetched_call_back;
 
 void* SIG_REC(void *args){
+    std::vector<std::string> out = {};
+    const char* request = (const char*)args;
+
     signal(22, handler);
-    while(1) {
+    int sock = getSocket(54911, "192.168.1.228");
+
+    write(sock, request, strlen(request));
+    train_arives temp;
+    while(!halt) {
         sleep(1);
+        if (read(sock,&temp, sizeof(train_arives)) == 0) break;
+
+
+
+        out.push_back(std::string(temp.time) + " " + std::to_string(temp.line) + " " + std::to_string(temp.vech));
+        __android_log_print(ANDROID_LOG_DEBUG, "MyNativeCode", "read %s %d", temp.time, sizeof(train_arives));
     }
+
+    if (!halt){
+        pthread_mutex_lock(&safty_mutex);
+        fetched_out = out;
+
+        JNIEnv* env;
+
+        jmethodID onResultMethod;
+        jclass callbackClass;
+
+        //__android_log_print(ANDROID_LOG_DEBUG, "MyNativeCode", "hejjjjjjjj");
+        on_fetched_call_back->jvm->AttachCurrentThread((JNIEnv **)&env, nullptr);
+        callbackClass = env->GetObjectClass(on_fetched_call_back->callbackGlobalRef);
+        onResultMethod = env->GetMethodID(callbackClass, "onResult", "(Ljava/lang/String;)V");
+        jstring result = env->NewStringUTF("hej");
+
+        env->CallVoidMethod(on_fetched_call_back->callbackGlobalRef, onResultMethod, result);
+    }
+
+    pthread_mutex_unlock(&fetch_mutex);
+    close(sock);
+
+    while(!halt){
+        sched_yield();
+    };
 
 
     return nullptr;
 }
+
 
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_test4_MainActivity_SIGNALS(JNIEnv *env, jobject thiz) {
-    __android_log_print(ANDROID_LOG_DEBUG, "MyNativeCode", "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!hej");
-    pthread_t thread1, thread2;
+Java_com_example_test4_MainActivity_FetchDataInit(JNIEnv *env, jobject thiz, jobject callback) {
+    JavaVM* jvm;
+    env->GetJavaVM(&jvm);
+
+    // Make global reference to callback
+    jobject globalCallback = env->NewGlobalRef(callback);
+
+    // Allocate data for pthread
+    ThreadData* data = new ThreadData();
+    data->jvm = jvm;
+    data->callbackGlobalRef = globalCallback;
 
 
-    signal(22, handler);
+    on_fetched_call_back = data;
 
-    pthread_create(&thread2, nullptr, SIG_REC, NULL);
-    sleep(1);
-    pthread_create(&thread1, nullptr, SIGNAL_TEST, (void*)thread2);
+    pthread_mutex_init(&fetch_mutex, NULL);
+    pthread_mutex_init(&safty_mutex, NULL);
+}
+
+
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_example_test4_MainActivity_FetchData(JNIEnv *env, jobject thiz, jstring in) {
+    const char* inputChars = env->GetStringUTFChars(in, nullptr);
+
+    if (pthread_kill(fetching_thread, 22) != 0) {};
+
+    pthread_mutex_lock(&fetch_mutex);
+
+    pthread_create(&fetching_thread, nullptr, SIG_REC, (void*)inputChars);
+    pthread_detach(fetching_thread);
+
+
+    __android_log_print(ANDROID_LOG_DEBUG, "MyNativeCode", "empty");
 
 }
 
@@ -249,6 +328,30 @@ extern "C" JNIEXPORT jobjectArray   JNICALL
 
     return jarray;
 }
+
+
+
+extern "C" JNIEXPORT jobjectArray   JNICALL
+Java_com_example_test4_MainActivity_getFetchedData(
+        JNIEnv* env,
+        jobject
+) {
+    __android_log_print(ANDROID_LOG_DEBUG, "MyNativeCode", "alex");
+
+
+    jobjectArray jarray = env->NewObjectArray(
+            fetched_out.size(),
+            env->FindClass("java/lang/String"),
+            nullptr
+    );
+
+    for (size_t i = 0; i < fetched_out.size(); ++i) {
+        env->SetObjectArrayElement(jarray, i, env->NewStringUTF(fetched_out[i].c_str()));
+    }
+    pthread_mutex_unlock(&safty_mutex);
+    return jarray;
+}
+
 
 
 

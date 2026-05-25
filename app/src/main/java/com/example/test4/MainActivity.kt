@@ -1,5 +1,6 @@
 package com.example.test4
 
+import android.R
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
@@ -31,13 +32,18 @@ interface Callback {
 }
 var dummy : MutableState<Int> = mutableStateOf(0)
 
+var elements : MutableState<Array<String>> = mutableStateOf( emptyArray<String>())
 
 class MainActivity : ComponentActivity() {
     external fun capitalize(input: String): Array<String>
 
     external fun startThread(callback: Callback)
 
-    external fun SIGNALS()
+    external fun getFetchedData(): Array<String>
+
+    external fun FetchData(input: String)
+
+    external fun FetchDataInit(callback: Callback)
 
     companion object {
         init { System.loadLibrary("test4") }
@@ -47,13 +53,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         instance = this
+        MainActivity.instance.FetchDataInit(object : Callback {
+            override fun onResult(result: String) {
+                elements.value = MainActivity.instance.getFetchedData()
+            }
+        })
 
         startThread(object : Callback {
             override fun onResult(result: String) {
-                // Ensure Toast is on UI thread
+
                 dummy.value += 1;
             }
         })
+
         setContent { MyApplicationTheme { InputDisplayApp() } }
     }
 
@@ -62,21 +74,50 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun InputDisplayApp() {
 
+    var searchState = remember { mutableStateOf("") }
+    var extand = remember { mutableStateOf(false) }
 
-    Column(
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Top
+            .padding(16.dp)
     ) {
 
-        var searchState = remember { mutableStateOf("") }
-        var extand = remember { mutableStateOf(false) }
 
-        MySimpleSearch(searchState, extand,)
+        MySimpleElements(elements)
+
+        MySimpleSearch(searchState, extand)
+
     }
 }
 
+@Composable
+fun MySimpleElements(
+    elements: MutableState<Array<String>>,
+    modifier: Modifier = Modifier
+) {
+
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(10.dp)
+    ) {
+        Spacer(Modifier.height(60.dp))
+
+        elements.value.forEach { element ->
+
+            TextField(
+                value = element,
+                onValueChange = {},
+                label = { Text(element) },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(20.dp))
+        }
+    }
+}
 @Composable
 fun MySimpleSearch(
     searchState: MutableState<String>,
@@ -85,7 +126,7 @@ fun MySimpleSearch(
 ) {
     Column (
         modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .semantics { isTraversalGroup = true }
     ) {
         TextField(
@@ -107,10 +148,9 @@ fun MySimpleSearch(
                         headlineContent = { Text(option) },
                         modifier = Modifier
                             .clickable {
-                                MainActivity.instance.SIGNALS()
+                                MainActivity.instance.FetchData(option)
                                 searchState.value = option
                                 extand.value = false
-                                Log.i("TAG", "hejjjjjjjjj Informational message")
 
                             }
                             .fillMaxWidth()
